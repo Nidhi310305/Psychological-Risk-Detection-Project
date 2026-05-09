@@ -4,23 +4,41 @@ Backend Module for Mental Health Assessment System
 Version: 1.0.0
 """
 
-import spacy
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 import re
 from datetime import datetime
 from collections import Counter
 
-# Load models globally
+# Load models globally, but keep the backend usable if NLP extras are missing.
 try:
-    nlp = spacy.load('en_core_web_sm')
-    SPACY_MODEL_LOADED = True
-except Exception as e:
-    import warnings
-    warnings.warn(f"spaCy model en_core_web_sm not available: {e}. Falling back to blank English model.", UserWarning)
-    nlp = spacy.blank('en')
+    import spacy
+except Exception:
+    spacy = None
+
+try:
+    from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+except Exception:
+    SentimentIntensityAnalyzer = None
+
+if spacy is not None:
+    try:
+        nlp = spacy.load('en_core_web_sm')
+        SPACY_MODEL_LOADED = True
+    except Exception as e:
+        import warnings
+        warnings.warn(f"spaCy model en_core_web_sm not available: {e}. Falling back to blank English model.", UserWarning)
+        try:
+            nlp = spacy.blank('en')
+        except Exception:
+            nlp = None
+        SPACY_MODEL_LOADED = False
+else:
+    nlp = None
     SPACY_MODEL_LOADED = False
 
-vader = SentimentIntensityAnalyzer()
+try:
+    vader = SentimentIntensityAnalyzer() if SentimentIntensityAnalyzer is not None else None
+except Exception:
+    vader = None
 
 
 
@@ -178,6 +196,85 @@ STAGE1_QUESTIONS = [
     }
 ]
 
+STAGE_WEIGHTS = {
+    'stage1_pras': 0.25,
+    'stage2_asna': 0.30,
+    'stage3_clinical': 0.45
+}
+
+STAGE2_IMAGE_POOL = [
+    {
+        'id': 'image_1',
+        'title': 'Bonds of the Web',
+        'file': 'assets/images/bonds_of_the_web.jpg',
+        'prompt': 'What do you notice first in this image? Do you see connected figures, a solitary form, or abstract patterns? What does this draw out in you?'
+    },
+    {
+        'id': 'image_2',
+        'title': 'Shattered Ascent',
+        'file': 'assets/images/shattered_ascent.jpeg',
+        'prompt': 'What strikes you most—the glowing energy rising upward, the broken stones themselves, or the balance between light and darkness? What does this evoke?'
+    },
+    {
+        'id': 'image_3',
+        'title': 'Ancestral Embrace',
+        'file': 'assets/images/ancestral_embrace.jpeg',
+        'prompt': 'What captures your attention first—the reaching hands and light, the tree structure, or the roots below? What feeling does this image stir in you?'
+    }
+]
+
+STAGE2_QUESTIONS = [
+    {
+        'id': 'stage2_asna_1',
+        'question': 'Look at the image and share your interpretation in as much detail as you can.',
+        'focus': 'projective_narrative',
+        'weight': 1.0
+    }
+]
+
+DASS21_QUESTIONS = [
+    {'id': 'dass_1', 'number': 1, 'subscale': 'stress', 'question': 'I found it hard to wind down'},
+    {'id': 'dass_2', 'number': 2, 'subscale': 'anxiety', 'question': 'I was aware of dryness of my mouth'},
+    {'id': 'dass_3', 'number': 3, 'subscale': 'depression', 'question': "I couldn\'t seem to experience any positive feeling at all"},
+    {'id': 'dass_4', 'number': 4, 'subscale': 'anxiety', 'question': 'I experienced breathing difficulty (e.g., excessively rapid breathing, breathlessness in the absence of physical exertion)'},
+    {'id': 'dass_5', 'number': 5, 'subscale': 'depression', 'question': 'I found it difficult to work up the initiative to do things'},
+    {'id': 'dass_6', 'number': 6, 'subscale': 'stress', 'question': 'I tended to over-react to situations'},
+    {'id': 'dass_7', 'number': 7, 'subscale': 'anxiety', 'question': 'I experienced trembling (e.g., in the hands)'},
+    {'id': 'dass_8', 'number': 8, 'subscale': 'stress', 'question': 'I felt that I was using a lot of nervous energy'},
+    {'id': 'dass_9', 'number': 9, 'subscale': 'anxiety', 'question': 'I found myself in situations that made me so anxious I was most relieved when they ended'},
+    {'id': 'dass_10', 'number': 10, 'subscale': 'depression', 'question': 'I felt that I had nothing to look forward to'},
+    {'id': 'dass_11', 'number': 11, 'subscale': 'stress', 'question': 'I found myself getting agitated'},
+    {'id': 'dass_12', 'number': 12, 'subscale': 'stress', 'question': 'I found it difficult to relax'},
+    {'id': 'dass_13', 'number': 13, 'subscale': 'depression', 'question': 'I felt down-hearted and blue'},
+    {'id': 'dass_14', 'number': 14, 'subscale': 'stress', 'question': 'I was intolerant of anything that kept me from getting on with what I was doing'},
+    {'id': 'dass_15', 'number': 15, 'subscale': 'anxiety', 'question': 'I felt I was close to panic'},
+    {'id': 'dass_16', 'number': 16, 'subscale': 'depression', 'question': 'I was unable to become enthusiastic about anything'},
+    {'id': 'dass_17', 'number': 17, 'subscale': 'depression', 'question': 'I felt I wasn\'t worth much as a person'},
+    {'id': 'dass_18', 'number': 18, 'subscale': 'stress', 'question': 'I felt that I was rather touchy'},
+    {'id': 'dass_19', 'number': 19, 'subscale': 'anxiety', 'question': 'I was aware of the action of my heart in the absence of physical exertion (e.g., sense of heart rate increase, heart missing a beat)'},
+    {'id': 'dass_20', 'number': 20, 'subscale': 'anxiety', 'question': 'I felt scared without any good reason'},
+    {'id': 'dass_21', 'number': 21, 'subscale': 'depression', 'question': 'I felt that life was meaningless'}
+]
+
+DASS21_RESPONSE_OPTIONS = {
+    0: 'Did not apply to me at all',
+    1: 'Applied to me to some degree, or some of the time',
+    2: 'Applied to me to a considerable degree, or a good part of time',
+    3: 'Applied to me very much, or most of the time'
+}
+
+DASS21_INSTRUCTIONS = (
+    'Please read each statement and select a number 0, 1, 2 or 3 which indicates how much the statement applied to you over the past week. '
+    'There are no right or wrong answers. Do not spend too much time on any statement.\n\n'
+    'The rating scale is as follows:\n'
+    '0 - Did not apply to me at all\n'
+    '1 - Applied to me to some degree, or some of the time\n'
+    '2 - Applied to me to a considerable degree, or a good part of time\n'
+    '3 - Applied to me very much, or most of the time'
+)
+
+STAGE3_QUESTIONS = DASS21_QUESTIONS
+
 # ==========================================
 # CORE FUNCTIONS
 # ==========================================
@@ -186,11 +283,13 @@ def preprocess_text(text):
     """Clean and prepare text for analysis"""
     if not text or len(text.strip()) == 0:
         return "", []
-    
     text_lower = text.lower()
     text_clean = ' '.join(text_lower.split())
-    doc = nlp(text_clean)
-    tokens = [token.text for token in doc if not token.is_space]
+    if nlp is not None:
+        doc = nlp(text_clean)
+        tokens = [token.text for token in doc if not token.is_space]
+    else:
+        tokens = text_clean.split()
     
     return text_clean, tokens
 
@@ -238,7 +337,18 @@ def analyze_sentiment(text):
             'negative': 0,
             'neutral': 100
         }
-    
+    if vader is None:
+        text_lower = text.lower()
+        positive_hits = sum(word in text_lower for word in ['good', 'great', 'happy', 'hope', 'calm', 'better', 'love'])
+        negative_hits = sum(word in text_lower for word in ['bad', 'sad', 'worried', 'anxious', 'angry', 'hopeless', 'terrible'])
+        compound = 0 if positive_hits == negative_hits else (0.5 if positive_hits > negative_hits else -0.5)
+        return {
+            'compound': compound,
+            'positive': max(0, positive_hits * 20),
+            'negative': max(0, negative_hits * 20),
+            'neutral': max(0, 100 - (positive_hits + negative_hits) * 20)
+        }
+
     scores = vader.polarity_scores(text)
     
     sentiment_results = {
@@ -250,55 +360,23 @@ def analyze_sentiment(text):
     
     return sentiment_results
 
+def analyze_responses(user_responses):
+    return run_stage1_assessment(user_responses)
 
 # ==========================================
 # Lightweight BERT classifier wrapper
 # ==========================================
+# 
+
+# Hard-disable transformers/BERT for stability
+TRANSFORMERS_AVAILABLE = False
 
 class BertClassifier:
-    """Minimal wrapper that lazily loads a Hugging Face sentiment pipeline.
-    Uses a distilBERT sentiment model as a placeholder; can be customized
-    by passing a different model name to `BertClassifier(model_name=...)`.
-    If `transformers` is not installed, classifier reports unavailable.
-    """
-    def __init__(self, model_name=None):
-        self.model_name = model_name or 'distilbert-base-uncased-finetuned-sst-2-english'
-        self._pipe = None
-
-    def _ensure_loaded(self):
-        if not TRANSFORMERS_AVAILABLE:
-            return
-        if self._pipe is None:
-            try:
-                self._pipe = _hf_pipeline('sentiment-analysis', model=self.model_name, tokenizer=self.model_name)
-            except Exception:
-                # Fallback to default pipeline if custom model download fails
-                self._pipe = _hf_pipeline('sentiment-analysis')
-
     def predict(self, text):
-        """Return a small dict: {'available': bool, 'label': str, 'score': float} or {'available': False}.
-        """
-        if not TRANSFORMERS_AVAILABLE:
-            return {'available': False}
-
-        try:
-            self._ensure_loaded()
-            if not self._pipe:
-                return {'available': False}
-
-            # Truncate long text to keep inference fast
-            snippet = text if len(text) <= 1000 else text[:1000]
-            out = self._pipe(snippet)
-            if isinstance(out, list) and len(out) > 0:
-                return {'available': True, 'label': out[0].get('label'), 'score': float(out[0].get('score', 0.0))}
-            return {'available': True, 'error': 'empty_output'}
-        except Exception as e:
-            return {'available': False, 'error': str(e)}
-
-
-# Global classifier instance (lazy)
+        return {'available': False}
 bert_classifier = BertClassifier()
 
+# 
 
 def analyze_pronouns(tokens, dictionary=MENTAL_HEALTH_DICTIONARY):
     """Analyze pronoun usage patterns"""
@@ -682,10 +760,10 @@ def calculate_response_risk_score(analysis):
 
 
 def categorize_risk(score):
-    """Categorize risk level based on score"""
-    if score < 33:
+    """Categorize risk level based on score - optimized thresholds"""
+    if score < 34:
         return 'LOW'
-    elif score < 67:
+    elif score < 59:
         return 'MODERATE'
     else:
         return 'HIGH'
@@ -835,8 +913,21 @@ def calculate_weighted_overall_score(individual_analyses):
     if not valid_analyses:
         return 0
     
-    total_weight = sum(a['weight'] for a in valid_analyses)
-    weighted_sum = sum(a['risk_score'] * a['weight'] for a in valid_analyses)
+    def _safe_numeric(value):
+        try:
+            if value is None:
+                return 0.0
+            numeric_value = float(value)
+            if numeric_value != numeric_value:
+                return 0.0
+            return numeric_value
+        except Exception:
+            return 0.0
+
+    total_weight = sum(_safe_numeric(a.get('weight', 0)) for a in valid_analyses)
+    weighted_sum = sum(_safe_numeric(a.get('risk_score', 0)) * _safe_numeric(a.get('weight', 0)) for a in valid_analyses)
+    if total_weight <= 0:
+        return 0
     
     overall_score = round(weighted_sum / total_weight, 1)
     
@@ -1408,9 +1499,9 @@ def run_stage1_assessment(user_responses):
         },
         'per_question_scores': {
             q_id: {
-                'risk_score': analysis['risk_score'],
-                'risk_level': analysis['risk_level'],
-                'valid': analysis['valid']
+                'risk_score': analysis.get('risk_score', 0),
+                'risk_level': analysis.get('risk_level', 'UNKNOWN'),
+                'valid': analysis.get('valid', False)
             }
             for q_id, analysis in results['individual_analyses'].items()
         },
@@ -1454,6 +1545,671 @@ def determine_next_action(results):
             'message': 'Low risk detected. Continue to Stage 2.',
             'continue_to_stage2': True
         }
+
+
+def _build_stage_result(stage_name, stage_questions, user_responses):
+    """Generic helper for stage-level scoring and aggregation."""
+    stage_result = {
+        'timestamp': datetime.now().isoformat(),
+        'stage': stage_name,
+        'questions_analyzed': 0,
+        'valid_responses': 0,
+        'invalid_responses': 0,
+        'individual_analyses': {},
+        'aggregated_metrics': {},
+        'red_flags_summary': {
+            'total_critical': 0,
+            'total_warning': 0,
+            'all_flags': []
+        },
+        'overall_risk_score': 0,
+        'overall_risk_level': 'UNKNOWN',
+        'crisis_detected': False,
+        'stage_signal': {}
+    }
+
+    for question_data in stage_questions:
+        question_id = question_data['id']
+        question_text = question_data['question']
+        question_weight = question_data.get('weight', 1.0)
+        response_text = user_responses.get(question_id, '')
+
+        analysis = analyze_single_response(question_id, question_text, response_text)
+        analysis['weight'] = question_weight
+
+        stage_result['individual_analyses'][question_id] = analysis
+        stage_result['questions_analyzed'] += 1
+
+        if analysis['valid']:
+            stage_result['valid_responses'] += 1
+            if analysis['red_flags']:
+                stage_result['red_flags_summary']['total_critical'] += analysis['critical_flags_count']
+                stage_result['red_flags_summary']['total_warning'] += analysis['warning_flags_count']
+                stage_result['red_flags_summary']['all_flags'].extend([
+                    {**flag, 'question_id': question_id} for flag in analysis['red_flags']
+                ])
+                if analysis['critical_flags_count'] > 0:
+                    stage_result['crisis_detected'] = True
+        else:
+            stage_result['invalid_responses'] += 1
+
+    stage_result['aggregated_metrics'] = calculate_aggregated_metrics(stage_result['individual_analyses'])
+    stage_result['overall_risk_score'] = calculate_weighted_overall_score(stage_result['individual_analyses'])
+    stage_result['overall_risk_level'] = categorize_risk(stage_result['overall_risk_score'])
+    stage_result['stage_signal'] = {
+        'score': stage_result['overall_risk_score'],
+        'level': stage_result['overall_risk_level'],
+        'crisis_detected': stage_result['crisis_detected'],
+        'critical_flags': stage_result['red_flags_summary']['total_critical'],
+        'warning_flags': stage_result['red_flags_summary']['total_warning'],
+        'valid_responses': stage_result['valid_responses'],
+        'confidence': (
+            'HIGH'
+            if stage_result['valid_responses'] == len(stage_questions) and stage_questions
+            else 'MODERATE'
+            if stage_result['valid_responses'] >= max(len(stage_questions) - 1, 1)
+            else 'LOW'
+        )
+    }
+
+    return stage_result
+
+
+def _build_stage_api_response(stage_name, stage_result, extra_summary=None):
+    """Convert a stage result into a stable API response."""
+    aggregated_metrics = stage_result.get('aggregated_metrics', {})
+    liwc_metrics = aggregated_metrics.get('liwc', {}) if aggregated_metrics else {}
+    sentiment_metrics = aggregated_metrics.get('sentiment', {}) if aggregated_metrics else {}
+    pronoun_metrics = aggregated_metrics.get('pronouns', {}) if aggregated_metrics else {}
+    temporal_metrics = aggregated_metrics.get('temporal', {}) if aggregated_metrics else {}
+
+    api_response = {
+        'status': 'success',
+        'stage': stage_name,
+        'timestamp': stage_result['timestamp'],
+        'summary': {
+            'overall_risk_score': stage_result['overall_risk_score'],
+            'risk_level': stage_result['overall_risk_level'],
+            'crisis_detected': stage_result['crisis_detected'],
+            'confidence': stage_result['stage_signal'].get('confidence', 'LOW')
+        },
+        'metrics': {
+            'questions_analyzed': stage_result['questions_analyzed'],
+            'valid_responses': stage_result['valid_responses'],
+            'average_positive_emotion': liwc_metrics.get('positive_emotion', 0),
+            'average_negative_emotion': liwc_metrics.get('negative_emotion', 0),
+            'average_hopelessness': liwc_metrics.get('hopelessness', 0),
+            'average_i_pronoun': pronoun_metrics.get('i_percentage', 0),
+            'future_orientation_percentage': temporal_metrics.get('percentage_with_future', 0),
+            'average_sentiment': sentiment_metrics.get('compound', 0)
+        },
+        'red_flags': {
+            'total_critical': stage_result['red_flags_summary']['total_critical'],
+            'total_warning': stage_result['red_flags_summary']['total_warning'],
+            'details': stage_result['red_flags_summary']['all_flags']
+        },
+        'per_question_scores': {
+            q_id: {
+                'risk_score': analysis['risk_score'],
+                'risk_level': analysis['risk_level'],
+                'valid': analysis['valid']
+            }
+            for q_id, analysis in stage_result['individual_analyses'].items()
+        },
+        'stage_signal': stage_result['stage_signal']
+    }
+
+    if extra_summary:
+        api_response.update(extra_summary)
+
+    return api_response
+
+
+def run_stage2_assessment(user_response, image_id=None, image_prompt=None, user_id=None, image_title=None, image_path=None):
+    """Run the ASNA projective stage against a single image interpretation."""
+    question_prompt = image_prompt or STAGE2_QUESTIONS[0]['question']
+    stage_questions = [{
+        'id': STAGE2_QUESTIONS[0]['id'],
+        'question': question_prompt,
+        'focus': STAGE2_QUESTIONS[0]['focus'],
+        'weight': STAGE2_QUESTIONS[0]['weight']
+    }]
+    response_map = {stage_questions[0]['id']: user_response}
+    stage_result = _build_stage_result('stage2_asna', stage_questions, response_map)
+
+    extra_summary = {
+        'stage2_signal': {
+            'image_id': image_id,
+            'image_title': image_title,
+            'image_path': image_path,
+            'user_id': user_id,
+            'score': stage_result['overall_risk_score'],
+            'level': stage_result['overall_risk_level']
+        }
+    }
+
+    api_response = _build_stage_api_response('stage2_asna', stage_result, extra_summary)
+    api_response['image'] = {
+        'id': image_id,
+        'title': image_title,
+        'path': image_path,
+        'prompt': question_prompt
+    }
+    api_response['advice'] = generate_personalized_advice(api_response)
+    api_response['advice_text'] = format_advice_for_display(api_response['advice'])
+    return api_response
+
+
+def validate_dass21_responses(responses):
+    """Validate that all 21 DASS-21 items are present and within range."""
+    required_items = [f'dass_{i}' for i in range(1, 22)]
+    missing_items = []
+
+    for item in required_items:
+        if item not in responses:
+            missing_items.append(item)
+            continue
+
+        try:
+            value = int(responses[item])
+        except Exception:
+            missing_items.append(f'{item} (invalid value)')
+            continue
+
+        if value not in [0, 1, 2, 3]:
+            missing_items.append(f'{item} (invalid value)')
+
+    if missing_items:
+        return {
+            'valid': False,
+            'message': f'Missing or invalid responses for {len(missing_items)} items',
+            'missing_items': missing_items
+        }
+
+    return {'valid': True, 'missing_items': []}
+
+
+def calculate_dass21_scores(responses):
+    """Calculate DASS-21 subscale scores and severity ratings."""
+    depression_items = [3, 5, 10, 13, 16, 17, 21]
+    anxiety_items = [2, 4, 7, 9, 15, 19, 20]
+    stress_items = [1, 6, 8, 11, 12, 14, 18]
+
+    def _response_value(item_number):
+        try:
+            return int(responses.get(f'dass_{item_number}', 0))
+        except Exception:
+            return 0
+
+    depression_raw = sum(_response_value(item) for item in depression_items)
+    anxiety_raw = sum(_response_value(item) for item in anxiety_items)
+    stress_raw = sum(_response_value(item) for item in stress_items)
+
+    depression_score = depression_raw * 2
+    anxiety_score = anxiety_raw * 2
+    stress_score = stress_raw * 2
+
+    depression_severity = get_depression_severity(depression_score)
+    anxiety_severity = get_anxiety_severity(anxiety_score)
+    stress_severity = get_stress_severity(stress_score)
+
+    return {
+        'depression': {
+            'raw_score': depression_raw,
+            'final_score': depression_score,
+            'severity': depression_severity,
+            'max_score': 42
+        },
+        'anxiety': {
+            'raw_score': anxiety_raw,
+            'final_score': anxiety_score,
+            'severity': anxiety_severity,
+            'max_score': 42
+        },
+        'stress': {
+            'raw_score': stress_raw,
+            'final_score': stress_score,
+            'severity': stress_severity,
+            'max_score': 42
+        }
+    }
+
+
+def get_depression_severity(score):
+    """Official DASS-21 Depression severity ratings."""
+    if score <= 9:
+        return {'level': 'Normal', 'risk': 'LOW'}
+    elif score <= 13:
+        return {'level': 'Mild', 'risk': 'LOW'}
+    elif score <= 20:
+        return {'level': 'Moderate', 'risk': 'MODERATE'}
+    elif score <= 27:
+        return {'level': 'Severe', 'risk': 'HIGH'}
+    return {'level': 'Extremely Severe', 'risk': 'HIGH'}
+
+
+def get_anxiety_severity(score):
+    """Official DASS-21 Anxiety severity ratings."""
+    if score <= 7:
+        return {'level': 'Normal', 'risk': 'LOW'}
+    elif score <= 9:
+        return {'level': 'Mild', 'risk': 'LOW'}
+    elif score <= 14:
+        return {'level': 'Moderate', 'risk': 'MODERATE'}
+    elif score <= 19:
+        return {'level': 'Severe', 'risk': 'HIGH'}
+    return {'level': 'Extremely Severe', 'risk': 'HIGH'}
+
+
+def get_stress_severity(score):
+    """Official DASS-21 Stress severity ratings."""
+    if score <= 14:
+        return {'level': 'Normal', 'risk': 'LOW'}
+    elif score <= 18:
+        return {'level': 'Mild', 'risk': 'LOW'}
+    elif score <= 25:
+        return {'level': 'Moderate', 'risk': 'MODERATE'}
+    elif score <= 33:
+        return {'level': 'Severe', 'risk': 'HIGH'}
+    return {'level': 'Extremely Severe', 'risk': 'HIGH'}
+
+
+def calculate_stage3_risk_score(dass_results):
+    """Convert DASS-21 subscale scores to a standardized 0-100 risk score."""
+    depression = dass_results['depression']['final_score']
+    anxiety = dass_results['anxiety']['final_score']
+    stress = dass_results['stress']['final_score']
+
+    depression_pct = (depression / 42) * 100
+    anxiety_pct = (anxiety / 42) * 100
+    stress_pct = (stress / 42) * 100
+
+    final_risk_score = (
+        depression_pct * 0.40 +
+        anxiety_pct * 0.35 +
+        stress_pct * 0.25
+    )
+
+    if final_risk_score < 33:
+        risk_level = 'LOW'
+    elif final_risk_score < 67:
+        risk_level = 'MODERATE'
+    else:
+        risk_level = 'HIGH'
+
+    crisis_detected = any([
+        dass_results['depression']['severity']['level'] == 'Extremely Severe',
+        dass_results['anxiety']['severity']['level'] == 'Extremely Severe',
+        dass_results['stress']['severity']['level'] == 'Extremely Severe'
+    ])
+
+    return {
+        'risk_score': round(final_risk_score, 2),
+        'risk_level': risk_level,
+        'crisis_detected': crisis_detected,
+        'subscale_scores': dass_results,
+        'calculation_method': 'weighted',
+        'weights': {
+            'depression': 0.40,
+            'anxiety': 0.35,
+            'stress': 0.25
+        }
+    }
+
+
+def generate_dass21_interpretation(dass_results):
+    """Generate a concise clinical interpretation for DASS-21 results."""
+    dep_severity = dass_results['depression']['severity']['level']
+    anx_severity = dass_results['anxiety']['severity']['level']
+    str_severity = dass_results['stress']['severity']['level']
+
+    interpretation = {
+        'summary': f'Depression: {dep_severity}, Anxiety: {anx_severity}, Stress: {str_severity}',
+        'primary_concern': None,
+        'recommendations': []
+    }
+
+    severities = {
+        'Depression': dass_results['depression']['final_score'],
+        'Anxiety': dass_results['anxiety']['final_score'],
+        'Stress': dass_results['stress']['final_score']
+    }
+    interpretation['primary_concern'] = max(severities, key=severities.get)
+
+    if dep_severity in ['Severe', 'Extremely Severe']:
+        interpretation['recommendations'].append('Depression scores indicate significant distress. Professional mental health support is strongly recommended.')
+    if anx_severity in ['Severe', 'Extremely Severe']:
+        interpretation['recommendations'].append('Anxiety scores suggest considerable worry and physiological arousal. Consider consulting a mental health professional.')
+    if str_severity in ['Severe', 'Extremely Severe']:
+        interpretation['recommendations'].append('Stress scores indicate high tension and difficulty relaxing. Stress management interventions may be beneficial.')
+    if all(s in ['Normal', 'Mild'] for s in [dep_severity, anx_severity, str_severity]):
+        interpretation['recommendations'].append('Scores are within normal range. Continue with regular self-care and mental health maintenance.')
+
+    return interpretation
+
+
+def get_dass21_citation():
+    """Required citation for research and educational use."""
+    return {
+        'instrument': 'DASS-21',
+        'full_name': 'Depression Anxiety Stress Scales - 21 Items',
+        'authors': 'Lovibond, S.H. & Lovibond, P.F.',
+        'year': 1995,
+        'source': 'Psychology Foundation of Australia',
+        'citation_text': 'Lovibond, S.H. & Lovibond, P.F. (1995). Manual for the Depression Anxiety Stress Scales. (2nd Ed.) Sydney: Psychology Foundation of Australia.',
+        'license': 'Free for research and educational purposes (non-commercial use)',
+        'website': 'http://www2.psy.unsw.edu.au/dass/'
+    }
+
+
+def determine_next_action_stage3(risk_assessment):
+    """Determine workflow next step based on Stage 3 results."""
+    if risk_assessment['crisis_detected']:
+        return 'CRISIS_INTERVENTION'
+    if risk_assessment['risk_level'] == 'HIGH':
+        return 'CLINICAL_REFERRAL'
+    if risk_assessment['risk_level'] == 'MODERATE':
+        return 'MONITORING_RECOMMENDED'
+    return 'SELF_CARE_SUPPORT'
+
+
+def _build_dass21_red_flags(dass_scores):
+    details = []
+    total_critical = 0
+    total_warning = 0
+
+    for subscale_name, result in dass_scores.items():
+        severity = result['severity']['level']
+        score = result['final_score']
+        if severity == 'Extremely Severe':
+            total_critical += 1
+            details.append({
+                'severity': 'CRITICAL',
+                'type': f'{subscale_name}_extremely_severe',
+                'trigger': f'{subscale_name} score {score}',
+                'message': f'{subscale_name.capitalize()} severity is extremely severe ({score}/42).'
+            })
+        elif severity == 'Severe':
+            total_warning += 1
+            details.append({
+                'severity': 'WARNING',
+                'type': f'{subscale_name}_severe',
+                'trigger': f'{subscale_name} score {score}',
+                'message': f'{subscale_name.capitalize()} severity is severe ({score}/42).'
+            })
+        elif severity == 'Moderate':
+            total_warning += 1
+            details.append({
+                'severity': 'WARNING',
+                'type': f'{subscale_name}_moderate',
+                'trigger': f'{subscale_name} score {score}',
+                'message': f'{subscale_name.capitalize()} severity is moderate ({score}/42).'
+            })
+
+    return {
+        'total_critical': total_critical,
+        'total_warning': total_warning,
+        'details': details
+    }
+
+
+def run_stage3_assessment(user_responses):
+    """Run the DASS-21 Stage 3 clinical assessment."""
+    validation = validate_dass21_responses(user_responses)
+    if not validation['valid']:
+        return {
+            'status': 'error',
+            'stage': 'stage3_clinical',
+            'message': validation['message'],
+            'missing_items': validation['missing_items'],
+            'summary': {
+                'overall_risk_score': 0,
+                'risk_level': 'UNKNOWN',
+                'crisis_detected': False,
+                'confidence': 'LOW'
+            }
+        }
+
+    dass_scores = calculate_dass21_scores(user_responses)
+    risk_assessment = calculate_stage3_risk_score(dass_scores)
+    interpretation = generate_dass21_interpretation(dass_scores)
+    red_flags = _build_dass21_red_flags(dass_scores)
+
+    stage_signal = {
+        'score': risk_assessment['risk_score'],
+        'level': risk_assessment['risk_level'],
+        'crisis_detected': risk_assessment['crisis_detected'],
+        'confidence': 'HIGH',
+        'depression_score': dass_scores['depression']['final_score'],
+        'anxiety_score': dass_scores['anxiety']['final_score'],
+        'stress_score': dass_scores['stress']['final_score'],
+        'depression_severity': dass_scores['depression']['severity']['level'],
+        'anxiety_severity': dass_scores['anxiety']['severity']['level'],
+        'stress_severity': dass_scores['stress']['severity']['level']
+    }
+
+    per_question_scores = {}
+    for question_data in DASS21_QUESTIONS:
+        item_id = question_data['id']
+        item_number = question_data['number']
+        raw_value = int(user_responses.get(item_id, 0))
+        per_question_scores[item_id] = {
+            'question_number': item_number,
+            'subscale': question_data['subscale'],
+            'response': raw_value,
+            'risk_score': raw_value * 33.33,
+            'risk_level': 'LOW' if raw_value <= 1 else 'MODERATE' if raw_value == 2 else 'HIGH',
+            'valid': True
+        }
+
+    summary = {
+        'overall_risk_score': risk_assessment['risk_score'],
+        'risk_level': risk_assessment['risk_level'],
+        'crisis_detected': risk_assessment['crisis_detected'],
+        'confidence': 'HIGH',
+        'interpretation_summary': interpretation['summary'],
+        'primary_concern': interpretation['primary_concern']
+    }
+
+    metrics = {
+        'questions_analyzed': len(DASS21_QUESTIONS),
+        'valid_responses': len(DASS21_QUESTIONS),
+        'depression_raw': dass_scores['depression']['raw_score'],
+        'depression_score': dass_scores['depression']['final_score'],
+        'depression_severity': dass_scores['depression']['severity']['level'],
+        'anxiety_raw': dass_scores['anxiety']['raw_score'],
+        'anxiety_score': dass_scores['anxiety']['final_score'],
+        'anxiety_severity': dass_scores['anxiety']['severity']['level'],
+        'stress_raw': dass_scores['stress']['raw_score'],
+        'stress_score': dass_scores['stress']['final_score'],
+        'stress_severity': dass_scores['stress']['severity']['level']
+    }
+
+    api_response = {
+        'status': 'success',
+        'stage': 'stage3_clinical',
+        'assessment_date': datetime.now().isoformat(),
+        'overall_risk_score': risk_assessment['risk_score'],
+        'overall_risk_level': risk_assessment['risk_level'],
+        'risk_level': risk_assessment['risk_level'],
+        'crisis_detected': risk_assessment['crisis_detected'],
+        'summary': summary,
+        'metrics': metrics,
+        'red_flags': red_flags,
+        'per_question_scores': per_question_scores,
+        'stage_signal': stage_signal,
+        'dass21_results': dass_scores,
+        'subscale_breakdown': {
+            'depression': {
+                'score': dass_scores['depression']['final_score'],
+                'severity': dass_scores['depression']['severity']['level'],
+                'percentage': round((dass_scores['depression']['final_score'] / 42) * 100, 1)
+            },
+            'anxiety': {
+                'score': dass_scores['anxiety']['final_score'],
+                'severity': dass_scores['anxiety']['severity']['level'],
+                'percentage': round((dass_scores['anxiety']['final_score'] / 42) * 100, 1)
+            },
+            'stress': {
+                'score': dass_scores['stress']['final_score'],
+                'severity': dass_scores['stress']['severity']['level'],
+                'percentage': round((dass_scores['stress']['final_score'] / 42) * 100, 1)
+            }
+        },
+        'interpretation': interpretation,
+        'citation': get_dass21_citation(),
+        'next_action': determine_next_action_stage3(risk_assessment)
+    }
+
+    api_response['advice'] = generate_personalized_advice(api_response)
+    api_response['advice_text'] = format_advice_for_display(api_response['advice'])
+    return api_response
+
+
+def _merge_stage_metrics(stage_results):
+    """Average stage metric blocks into one combined view for the final page."""
+    valid_results = [result for result in stage_results if result]
+    if not valid_results:
+        return {}
+
+    def _avg_metric(path, default=0):
+        values = []
+        for result in valid_results:
+            current = result.get('aggregated_metrics', {})
+            for key in path[:-1]:
+                current = current.get(key, {}) if isinstance(current, dict) else {}
+            value = current.get(path[-1], default) if isinstance(current, dict) else default
+            values.append(value)
+        if not values:
+            return default
+        return round(sum(values) / len(values), 2)
+
+    combined_liwc_keys = set()
+    for result in valid_results:
+        combined_liwc_keys.update(result.get('aggregated_metrics', {}).get('liwc', {}).keys())
+
+    combined_liwc = {}
+    for key in combined_liwc_keys:
+        values = [result.get('aggregated_metrics', {}).get('liwc', {}).get(key, 0) for result in valid_results]
+        combined_liwc[key] = round(sum(values) / len(values), 2)
+
+    combined_sentiment = {
+        'compound': _avg_metric(['sentiment', 'compound'], 0),
+        'positive': _avg_metric(['sentiment', 'positive'], 0),
+        'negative': _avg_metric(['sentiment', 'negative'], 0),
+        'neutral': _avg_metric(['sentiment', 'neutral'], 0)
+    }
+
+    combined_pronouns = {
+        'i_percentage': _avg_metric(['pronouns', 'i_percentage'], 0),
+        'we_percentage': _avg_metric(['pronouns', 'we_percentage'], 0),
+        'ratio': _avg_metric(['pronouns', 'ratio'], 0)
+    }
+
+    future_count = sum(1 for result in valid_results if result.get('aggregated_metrics', {}).get('temporal', {}).get('responses_with_future', 0) > 0)
+    combined_temporal = {
+        'responses_with_future': future_count,
+        'percentage_with_future': round((future_count / len(valid_results) * 100), 2)
+    }
+
+    return {
+        'liwc': combined_liwc,
+        'sentiment': combined_sentiment,
+        'pronouns': combined_pronouns,
+        'temporal': combined_temporal,
+        'total_responses': len(valid_results)
+    }
+
+
+def calculate_final_weighted_score(stage1_score, stage2_score, stage3_score):
+    """Calculate the final risk score from the three stage scores."""
+    weighted_score = (
+        stage1_score * STAGE_WEIGHTS['stage1_pras'] +
+        stage2_score * STAGE_WEIGHTS['stage2_asna'] +
+        stage3_score * STAGE_WEIGHTS['stage3_clinical']
+    )
+    return round(weighted_score, 1)
+
+
+def run_final_assessment(stage1_results, stage2_results, stage3_results):
+    """Combine stage outputs into a final results payload."""
+    def _safe_numeric_score(value):
+        try:
+            if value is None:
+                return 0.0
+            numeric_value = float(value)
+            if numeric_value != numeric_value:
+                return 0.0
+            return numeric_value
+        except Exception:
+            return 0.0
+
+    stage1_score = _safe_numeric_score(stage1_results.get('summary', {}).get('overall_risk_score', 0))
+    stage2_score = _safe_numeric_score(stage2_results.get('summary', {}).get('overall_risk_score', 0))
+    stage3_score = _safe_numeric_score(stage3_results.get('summary', {}).get('overall_risk_score', 0))
+
+    final_score = calculate_final_weighted_score(stage1_score, stage2_score, stage3_score)
+    final_level = categorize_risk(final_score)
+    crisis_detected = any([
+        stage1_results.get('summary', {}).get('crisis_detected', False),
+        stage2_results.get('summary', {}).get('crisis_detected', False),
+        stage3_results.get('summary', {}).get('crisis_detected', False)
+    ])
+
+    combined_metrics = _merge_stage_metrics([
+        stage1_results,
+        stage2_results,
+        stage3_results
+    ])
+
+    final_results = {
+        'status': 'success',
+        'stage': 'final',
+        'timestamp': datetime.now().isoformat(),
+        'final_score': final_score,
+        'summary': {
+            'overall_risk_score': final_score,
+            'risk_level': final_level,
+            'crisis_detected': crisis_detected,
+            'confidence': 'HIGH' if stage1_results and stage2_results and stage3_results else 'MODERATE'
+        },
+        'overall_risk_score': final_score,
+        'overall_risk_level': final_level,
+        'risk_level': final_level,
+        'crisis_detected': crisis_detected,
+        'aggregated_metrics': combined_metrics,
+        'stages': {
+            'stage1_pras': stage1_results,
+            'stage2_asna': stage2_results,
+            'stage3_clinical': stage3_results
+        },
+        'stage_scores': {
+            'stage1_pras': stage1_score,
+            'stage2_asna': stage2_score,
+            'stage3_clinical': stage3_score,
+            'final_weighted_score': final_score
+        },
+        'stage_weights': STAGE_WEIGHTS,
+        'red_flags': {
+            'total_critical': sum(
+                result.get('red_flags', {}).get('total_critical', 0) for result in [stage1_results, stage2_results, stage3_results]
+            ),
+            'total_warning': sum(
+                result.get('red_flags', {}).get('total_warning', 0) for result in [stage1_results, stage2_results, stage3_results]
+            ),
+            'details': []
+        }
+    }
+
+    final_results['advice'] = generate_personalized_advice(final_results)
+    final_results['advice_text'] = format_advice_for_display(final_results['advice'])
+    final_results['advice_display'] = final_results['advice_text']
+
+    for stage_name, stage_result in final_results['stages'].items():
+        for flag in stage_result.get('red_flags', {}).get('details', []):
+            final_results['red_flags']['details'].append({**flag, 'stage': stage_name})
+
+    return final_results
 
 
 # ==========================================
